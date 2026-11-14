@@ -155,7 +155,7 @@
 
         // Global State
         const clientSessionId = Math.random().toString(36).substring(2, 8).toUpperCase();
-        let myOperatorName = `Op-${clientSessionId.slice(0, 3)}`;
+        let myOperatorName = '';
         let blendData = {
             globalDate: '',
             slots: [],
@@ -229,28 +229,41 @@
             return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         }
 
+        function getActorLabel() {
+            return myOperatorName || (currentMode === 'boss' ? 'Supervisor' : 'Operator');
+        }
+
         function onMyNameChange(val) {
-            myOperatorName = (val || '').trim() || `Op-${clientSessionId.slice(0, 3)}`;
-            touchMyPresence(`joined as ${myOperatorName}`);
+            myOperatorName = (val || '').trim();
+            if (myOperatorName) {
+                touchMyPresence(`joined as ${myOperatorName}`);
+            } else {
+                touchMyPresence();
+            }
             saveData();
         }
 
         function touchMyPresence(actionText) {
             if (!blendData.activeUsers) blendData.activeUsers = {};
-            blendData.activeUsers[clientSessionId] = {
-                name: myOperatorName,
-                role: currentMode,
-                lastSeen: Date.now()
-            };
-            // Prune stale sessions older than 2 minutes
+            if (myOperatorName) {
+                blendData.activeUsers[clientSessionId] = {
+                    name: myOperatorName,
+                    role: currentMode,
+                    lastSeen: Date.now()
+                };
+            } else {
+                delete blendData.activeUsers[clientSessionId];
+            }
+            // Prune stale sessions older than 2 minutes or unnamed sessions
             const now = Date.now();
             Object.keys(blendData.activeUsers).forEach((sid) => {
-                if (now - (blendData.activeUsers[sid]?.lastSeen || 0) > 120000) {
+                const u = blendData.activeUsers[sid];
+                if (!u || !u.name || now - (u.lastSeen || 0) > 120000) {
                     delete blendData.activeUsers[sid];
                 }
             });
             if (actionText) {
-                blendData.lastAction = `${myOperatorName} (${currentMode === 'boss' ? 'Boss' : 'Operator'}) ${actionText} at ${getShortTime()}`;
+                blendData.lastAction = `${getActorLabel()} (${currentMode === 'boss' ? 'Boss' : 'Operator'}) ${actionText} at ${getShortTime()}`;
             }
             renderCrewPresence();
         }
@@ -265,20 +278,39 @@
 
             const users = blendData.activeUsers || {};
             const now = Date.now();
-            const activeEntries = Object.entries(users).filter(([_, u]) => now - (u.lastSeen || 0) < 120000);
+            const activeEntries = Object.entries(users).filter(([_, u]) => u && u.name && (now - (u.lastSeen || 0) < 120000));
 
-            if (activeEntries.length === 0) {
-                crewContainer.innerHTML = `<span class="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-medium">🟢 ${myOperatorName} (You)</span>`;
+            // Deduplicate active crew by name (case-insensitive) so one person on multiple devices shows as one badge
+            const uniqueByName = new Map();
+            activeEntries.forEach(([sid, u]) => {
+                const cleanName = (u.name || '').trim();
+                if (!cleanName) return;
+                const key = cleanName.toLowerCase();
+                const isMe = sid === clientSessionId || (myOperatorName && key === myOperatorName.toLowerCase());
+                if (!uniqueByName.has(key)) {
+                    uniqueByName.set(key, {
+                        name: cleanName,
+                        role: u.role,
+                        isMe: isMe
+                    });
+                } else {
+                    const existing = uniqueByName.get(key);
+                    if (u.role === 'boss') existing.role = 'boss';
+                    if (isMe) existing.isMe = true;
+                }
+            });
+
+            if (uniqueByName.size === 0) {
+                crewContainer.innerHTML = `<span class="text-[11px] text-slate-500 italic">Enter your name above to appear live</span>`;
                 return;
             }
 
-            crewContainer.innerHTML = activeEntries.map(([sid, u]) => {
-                const isMe = sid === clientSessionId;
+            crewContainer.innerHTML = Array.from(uniqueByName.values()).map((u) => {
                 const badgeStyle = u.role === 'boss'
                     ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                     : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
                 const icon = u.role === 'boss' ? '👑' : '👷';
-                return `<span class="px-2 py-0.5 rounded-full border text-[11px] font-medium ${badgeStyle}">${icon} ${u.name}${isMe ? ' (You)' : ''}</span>`;
+                return `<span class="px-2 py-0.5 rounded-full border text-[11px] font-medium ${badgeStyle}">${icon} ${u.name}${u.isMe ? ' (You)' : ''}</span>`;
             }).join('');
         }
 
@@ -439,12 +471,16 @@
             blendData.slots = incoming.slots || [];
             blendData.activeUsers = incoming.activeUsers || {};
             blendData.lastAction = incoming.lastAction || blendData.lastAction || '';
-            // Ensure current user stays listed in activeUsers
-            blendData.activeUsers[clientSessionId] = {
-                name: myOperatorName,
-                role: currentMode,
-                lastSeen: Date.now()
-            };
+            // Ensure current user stays listed in activeUsers only if they entered a name
+            if (myOperatorName) {
+                blendData.activeUsers[clientSessionId] = {
+                    name: myOperatorName,
+                    role: currentMode,
+                    lastSeen: Date.now()
+                };
+            } else {
+                delete blendData.activeUsers[clientSessionId];
+            }
 
             const dateEl = document.getElementById('global-date');
             if (dateEl && document.activeElement !== dateEl) {
@@ -555,19 +591,19 @@
         function initApp() {
             const defaultDate = getDefaultDate();
             const nameInput = document.getElementById('my-operator-name');
-            if (nameInput) nameInput.value = myOperatorName;
+            if (nameInput) nameInput.value = '';
 
             blendData = {
                 globalDate: defaultDate,
                 slots: [createEmptySlot(), createEmptySlot()],
                 activeUsers: {},
-                lastAction: `${myOperatorName} connected`,
+                lastAction: 'Floor board ready — all changes sync live',
                 updatedAt: Date.now(),
                 updatedBy: clientSessionId
             };
 
             document.getElementById('global-date').value = blendData.globalDate;
-            touchMyPresence('joined the floor');
+            touchMyPresence();
             renderSlots();
 
             // 1. Listen for same-device cross-tab broadcast sync
@@ -613,7 +649,7 @@
 
         function verifyBossPassword() {
             const pwd = document.getElementById('boss-password-input').value;
-            if (pwd === '123') {
+            if (pwd === '321') {
                 currentMode = 'boss';
                 closePasswordModal();
                 touchMyPresence('unlocked Boss Mode');
@@ -647,7 +683,7 @@
         function addBlendSlot() {
             if (!blendData.slots) blendData.slots = [];
             const newSlot = createEmptySlot();
-            newSlot.lastEditedBy = myOperatorName;
+            newSlot.lastEditedBy = getActorLabel();
             newSlot.lastEditedTime = getShortTime();
             blendData.slots.push(newSlot);
             touchMyPresence(`added Blend Batch #${blendData.slots.length}`);
@@ -901,7 +937,7 @@
             const finishedCheckbox = document.getElementById(`finished-${i}`);
             if (!blendData.slots[i]) return;
             const opEl = document.getElementById(`operator-${i}`);
-            if (opEl && !opEl.value.trim()) {
+            if (opEl && !opEl.value.trim() && myOperatorName) {
                 opEl.value = myOperatorName;
                 blendData.slots[i].operator = myOperatorName;
             }
@@ -973,7 +1009,7 @@
 
         function markSlotEdited(i, actionSummary) {
             if (!blendData.slots[i]) return;
-            blendData.slots[i].lastEditedBy = myOperatorName;
+            blendData.slots[i].lastEditedBy = getActorLabel();
             blendData.slots[i].lastEditedTime = getShortTime();
             const badgeEl = document.getElementById(`slot-activity-${i}`);
             if (badgeEl) {
@@ -992,6 +1028,11 @@
 
         function claimBatchSlot(i) {
             const opInput = document.getElementById(`operator-${i}`);
+            if (!myOperatorName) {
+                const headerNameInput = document.getElementById('my-operator-name');
+                if (headerNameInput) headerNameInput.focus();
+                return;
+            }
             if (opInput) {
                 opInput.value = myOperatorName;
             }

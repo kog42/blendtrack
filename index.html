@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plastics Compounders, Inc. - Blending Report Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .slot-card-donext {
+            background-color: rgba(254, 240, 138, 0.15) !important;
+            border-color: #facc15 !important;
+            box-shadow: 0 0 15px rgba(250, 204, 21, 0.25);
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased">
+
+    <!-- Header -->
+    <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-40 px-4 py-3 shadow-lg">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-3">
+            <div class="flex items-center gap-3 w-full sm:w-auto justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center font-bold text-white shadow-md">PCI</div>
+                    <div>
+                        <h1 class="font-bold text-base sm:text-lg tracking-tight text-white leading-tight">Plastics Compounders, Inc.</h1>
+                        <p class="text-xs text-slate-400">Blending Report Tracker</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="sync-status" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Live Sync
+                    </span>
+                    <button onclick="requestBossMode()" class="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-amber-300 font-semibold rounded-lg border border-slate-700 transition" id="mode-toggle-btn">Mode: Operator</button>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
+                <button onclick="openScanModal()" class="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 py-1.5 bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs font-semibold rounded-xl shadow-lg hover:from-amber-600 hover:to-orange-700 transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    Scan Sheet
+                </button>
+                <div class="flex items-center gap-2 bg-slate-900 border border-slate-700 px-3 py-1.5 rounded-xl">
+                    <span class="text-xs text-slate-400">Date:</span>
+                    <input type="text" id="global-date" onchange="saveData()" class="bg-transparent text-white font-medium text-xs focus:outline-none w-24">
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Boss Controls Toolbar -->
+    <div id="boss-toolbar" class="max-w-7xl w-full mx-auto px-4 pt-4 hidden">
+        <div class="bg-slate-900 border border-amber-500/30 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-lg">
+            <div class="flex items-center gap-2">
+                <span class="px-2.5 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-bold rounded-lg">👑 Boss / Supervisor Mode</span>
+                <span class="text-xs text-slate-400">You can add new blend batches or remove slots.</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="addBlendSlot()" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    Add Blend Batch
+                </button>
+                <button onclick="clearAllData()" class="px-3 py-1.5 bg-slate-800 hover:bg-red-950 text-slate-300 hover:text-red-300 text-xs rounded-xl border border-slate-700 transition">Reset All</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-4">
+        <div id="slots-container" class="space-y-4">
+            <!-- Rendered dynamically -->
+        </div>
+    </main>
+
+    <!-- Scan Modal -->
+    <div id="scan-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+            <div class="flex justify-between items-center">
+                <h3 class="font-bold text-lg text-white">Scan Blend Sheet</h3>
+                <button onclick="closeScanModal()" class="text-slate-400 hover:text-white font-bold">&times;</button>
+            </div>
+            <p class="text-xs text-slate-400">Take a picture or upload an image of your physical blend sheet. The app will automatically parse the blender number, lot, and material descriptions.</p>
+            
+            <div class="border-2 border-dashed border-slate-700 hover:border-amber-500 rounded-xl p-8 text-center cursor-pointer transition relative">
+                <input type="file" id="scan-file-input" accept="image/*" capture="environment" onchange="handleImageScan(event)" class="absolute inset-0 opacity-0 cursor-pointer">
+                <div class="space-y-2">
+                    <svg class="w-10 h-10 mx-auto text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    <p class="text-sm font-semibold text-white">Tap to Take Photo or Upload Image</p>
+                    <p class="text-xs text-slate-400">Supports camera capture on mobile & file picker on PC</p>
+                </div>
+            </div>
+
+            <div id="scan-status-text" class="text-xs text-center text-amber-400 hidden font-medium">Analyzing sheet and filling fields...</div>
+            <div class="flex justify-end gap-3 pt-2">
+                <button onclick="closeScanModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Password Modal for Boss Mode -->
+    <div id="password-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+            <div class="flex justify-between items-center">
+                <h3 class="font-bold text-base text-white">Supervisor Authentication</h3>
+                <button onclick="closePasswordModal()" class="text-slate-400 hover:text-white font-bold">&times;</button>
+            </div>
+            <p class="text-xs text-slate-400">Enter the supervisor password to switch to Boss / Supervisor mode (Sample: <code class="text-amber-400 font-bold">123</code>):</p>
+            
+            <input type="password" id="boss-password-input" placeholder="Enter password..." class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500" onkeydown="if(event.key === 'Enter') verifyBossPassword()">
+            
+            <div id="password-error" class="text-xs text-red-400 hidden">Incorrect password. Please try again.</div>
+
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closePasswordModal()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition">Cancel</button>
+                <button onclick="verifyBossPassword()" class="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl transition">Unlock Boss Mode</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let blendData = { globalDate: '', slots: [] };
+        let activeTimers = {};
+        let timerSeconds = {};
+        let timerRunning = {};
+        let currentMode = 'operator'; // 'operator' or 'boss'
+
+        function initApp() {
+            const today = new Date();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            const yy = String(today.getFullYear()).slice(-2);
+            const defaultDate = `${mm}/${dd}/${yy}`;
+            
+            const saved = localStorage.getItem('pci_blend_tracker_data');
+            if (saved) {
+                try {
+                    blendData = JSON.parse(saved);
+                } catch(e) {
+                    blendData = { globalDate: defaultDate, slots: [] };
+                }
+            }
+
+            if (!blendData.globalDate) {
+                blendData.globalDate = defaultDate;
+            }
+
+            // If slots array is empty, initialize with 2 empty default slots so it doesn't open completely blank if preferred
+            if (!blendData.slots || !Array.isArray(blendData.slots) || blendData.slots.length === 0) {
+                blendData.slots = [
+                    { blenderNum: '', operator: '', lot: '', description: '', lbsIn: '', lbsOut: '', total: '', stage: 'not_started', doNext: false, finished: false, remainingSecs: 1200 },
+                    { blenderNum: '', operator: '', lot: '', description: '', lbsIn: '', lbsOut: '', total: '', stage: 'not_started', doNext: false, finished: false, remainingSecs: 1200 }
+                ];
+            }
+
+            document.getElementById('global-date').value = blendData.globalDate;
+
+            renderSlots();
+            
+            // Restore running timers if any
+            blendData.slots.forEach((slot, i) => {
+                if (slot.stage === 'blending' && !activeTimers[i]) {
+                    timerSeconds[i] = slot.remainingSecs !== undefined ? slot.remainingSecs : 1200;
+                    startTimer(i);
+                }
+            });
+        }
+
+        function requestBossMode() {
+            if (currentMode === 'boss') {
+                // Switch back to operator instantly
+                currentMode = 'operator';
+                updateModeUI();
+                renderSlots();
+            } else {
+                // Prompt for password
+                document.getElementById('boss-password-input').value = '';
+                document.getElementById('password-error').classList.add('hidden');
+                document.getElementById('password-modal').classList.remove('hidden');
+                setTimeout(() => document.getElementById('boss-password-input').focus(), 100);
+            }
+        }
+
+        function closePasswordModal() {
+            document.getElementById('password-modal').classList.add('hidden');
+        }
+
+        function verifyBossPassword() {
+            const pwd = document.getElementById('boss-password-input').value;
+            if (pwd === '123') {
+                currentMode = 'boss';
+                closePasswordModal();
+                updateModeUI();
+                renderSlots();
+            } else {
+                document.getElementById('password-error').classList.remove('hidden');
+            }
+        }
+
+        function updateModeUI() {
+            const btn = document.getElementById('mode-toggle-btn');
+            const toolbar = document.getElementById('boss-toolbar');
+            
+            if (currentMode === 'boss') {
+                btn.innerText = "Mode: Boss / Supervisor";
+                btn.classList.add('bg-amber-500/20', 'border-amber-500');
+                toolbar.classList.remove('hidden');
+            } else {
+                btn.innerText = "Mode: Operator";
+                btn.classList.remove('bg-amber-500/20', 'border-amber-500');
+                toolbar.classList.add('hidden');
+            }
+        }
+
+        function addBlendSlot() {
+            if (!blendData.slots) blendData.slots = [];
+            blendData.slots.push({
+                blenderNum: '',
+                operator: '',
+                lot: '',
+                description: '',
+                lbsIn: '',
+                lbsOut: '',
+                total: '',
+                stage: 'not_started',
+                doNext: false,
+                finished: false,
+                remainingSecs: 1200
+            });
+            saveData();
+            renderSlots();
+        }
+
+        function deleteBlendSlot(i) {
+            if (confirm(`Are you sure you want to delete Blend Batch #${i + 1}?`)) {
+                if (activeTimers[i]) {
+                    clearInterval(activeTimers[i]);
+                    activeTimers[i] = null;
+                }
+                blendData.slots.splice(i, 1);
+                saveData();
+                renderSlots();
+            }
+        }
+
+        function renderSlots() {
+            const container = document.getElementById('slots-container');
+            let html = '';
+
+            const slots = blendData.slots || [];
+
+            if (slots.length === 0) {
+                container.innerHTML = `<div class="text-center py-12 bg-slate-900 border border-slate-800 rounded-2xl"><p class="text-sm text-slate-400">No blend batches active. ${currentMode === 'boss' ? 'Click "Add Blend Batch" above to start.' : 'Switch to Boss mode to add new batches.'}</p></div>`;
+                return;
+            }
+
+            slots.forEach((data, i) => {
+                const isDoNext = data.doNext ? 'slot-card-donext' : 'border-slate-800';
+
+                html += `
+                <div id="slot-card-${i}" class="bg-slate-900 border ${isDoNext} rounded-2xl p-4 sm:p-5 shadow-lg transition relative">
+                    ${currentMode === 'boss' ? `
+                    <div class="absolute top-3 right-3">
+                        <button onclick="deleteBlendSlot(${i})" class="px-2 py-1 bg-red-950 hover:bg-red-900 text-red-300 text-[10px] font-semibold rounded-lg border border-red-800 transition flex items-center gap-1">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                            Delete Batch
+                        </button>
+                    </div>` : ''}
+
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                        <!-- Col 1: Blender & Operator -->
+                        <div class="md:col-span-3 space-y-3">
+                            <div class="flex items-center gap-2">
+                                <label class="text-xs font-semibold text-slate-400 w-20">Blender #</label>
+                                <input type="text" id="blender-${i}" value="${data.blenderNum || ''}" oninput="saveData()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500 font-bold text-center">
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <label class="text-xs font-semibold text-slate-400 w-20">Operator</label>
+                                <input type="text" id="operator-${i}" value="${data.operator || ''}" oninput="saveData()" placeholder="Name" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500">
+                            </div>
+                        </div>
+
+                        <!-- Col 2: Lot & Description -->
+                        <div class="md:col-span-4 space-y-3">
+                            <div class="flex items-center gap-2">
+                                <label class="text-xs font-semibold text-slate-400 w-24">Lot #</label>
+                                <input type="text" id="lot-${i}" value="${data.lot || ''}" oninput="saveData()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500 font-mono">
+                            </div>
+                            <div class="flex items-start gap-2">
+                                <label class="text-xs font-semibold text-slate-400 w-24 pt-1.5">Description</label>
+                                <textarea id="desc-${i}" oninput="saveData()" rows="2" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500 resize-none">${data.description || ''}</textarea>
+                            </div>
+                        </div>
+
+                        <!-- Col 3: Weights -->
+                        <div class="md:col-span-5 grid grid-cols-3 gap-2 bg-slate-950/40 p-3 rounded-xl border border-slate-800/80">
+                            <div>
+                                <label class="block text-[10px] font-medium text-slate-400 mb-1">Lbs In</label>
+                                <input type="number" id="lbsin-${i}" value="${data.lbsIn || ''}" oninput="calculateTotal(${i})" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-amber-500">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-medium text-slate-400 mb-1">Lbs Out</label>
+                                <input type="number" id="lbsout-${i}" value="${data.lbsOut || ''}" oninput="calculateTotal(${i})" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-amber-500">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-medium text-amber-400 mb-1">Total</label>
+                                <input type="text" id="total-${i}" value="${data.total || ''}" readonly class="w-full bg-slate-900 border border-amber-500/30 rounded-lg px-2 py-1 text-xs text-amber-300 font-bold">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Bar: Stage, Timer & Actions -->
+                    <div class="mt-4 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="flex items-center gap-2">
+                                <label class="text-xs text-slate-400 font-medium">Stage:</label>
+                                <select id="stage-${i}" onchange="onStageChange(${i}, this.value);" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400 font-medium">
+                                    <option value="not_started" ${data.stage === 'not_started' ? 'selected' : ''}>Not Started</option>
+                                    <option value="blending" ${data.stage === 'blending' ? 'selected' : ''}>Blending in Progress</option>
+                                    <option value="completed" ${data.stage === 'completed' ? 'selected' : ''}>Completed</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Timer Section -->
+                        <div class="flex items-center gap-3">
+                            <div id="timer-display-${i}" class="font-mono text-xs text-slate-300 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800">20:00</div>
+                            <button id="timer-btn-${i}" disabled class="px-3 py-1.5 bg-slate-800 opacity-50 cursor-not-allowed text-slate-300 text-xs font-semibold rounded-xl border border-slate-700">Auto-Starts</button>
+                            <button onclick="resetTimer(${i})" class="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-400 text-xs rounded-xl border border-slate-800 transition">Reset</button>
+                        </div>
+
+                        <!-- Checkboxes -->
+                        <div class="flex items-center gap-4">
+                            <label class="flex items-center gap-2 cursor-pointer bg-slate-950/60 px-3 py-1.5 rounded-xl border border-slate-800 hover:border-amber-400 transition">
+                                <input type="checkbox" id="do-next-${i}" ${data.doNext ? 'checked' : ''} onchange="onDoNextChange(${i})" class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-amber-500 focus:ring-amber-500">
+                                <span class="font-bold text-amber-300 text-xs">⭐ Do Next</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" id="finished-${i}" ${data.finished ? 'checked' : ''} onchange="onFinishedChange(${i})" class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-emerald-500 focus:ring-emerald-500">
+                                <span class="font-semibold text-emerald-400 text-xs">Mark Finished</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>`;
+            });
+
+            container.innerHTML = html;
+            
+            // Re-apply timer displays
+            slots.forEach((_, i) => {
+                updateTimerDisplay(i);
+            });
+        }
+
+        function startTimer(i) {
+            if (activeTimers[i]) return;
+            if (timerSeconds[i] === undefined || timerSeconds[i] <= 0) {
+                timerSeconds[i] = 20 * 60;
+            }
+            timerRunning[i] = true;
+            
+            const btn = document.getElementById(`timer-btn-${i}`);
+            if (btn) {
+                btn.innerText = "Running (Unpausable)";
+                btn.disabled = true;
+                btn.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+
+            activeTimers[i] = setInterval(() => {
+                if (timerSeconds[i] > 0) {
+                    timerSeconds[i]--;
+                    updateTimerDisplay(i);
+                } else {
+                    clearInterval(activeTimers[i]);
+                    activeTimers[i] = null;
+                    timerRunning[i] = false;
+                    if (btn) btn.innerText = "Time Up";
+                }
+                saveData();
+            }, 1000);
+        }
+
+        function resetTimer(i) {
+            if (activeTimers[i]) {
+                clearInterval(activeTimers[i]);
+                activeTimers[i] = null;
+            }
+            timerRunning[i] = false;
+            timerSeconds[i] = 20 * 60;
+            updateTimerDisplay(i);
+            const btn = document.getElementById(`timer-btn-${i}`);
+            if (btn) {
+                btn.innerText = "Auto-Starts";
+                btn.disabled = true;
+                btn.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+            saveData();
+        }
+
+        function updateTimerDisplay(i) {
+            const display = document.getElementById(`timer-display-${i}`);
+            if (!display) return;
+            const totalSecs = timerSeconds[i] !== undefined ? timerSeconds[i] : (20 * 60);
+            const mins = Math.floor(totalSecs / 60);
+            const secs = totalSecs % 60;
+            display.innerText = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            if (totalSecs <= 60) {
+                display.classList.add('text-red-400', 'animate-pulse');
+            } else {
+                display.classList.remove('text-red-400', 'animate-pulse');
+            }
+        }
+
+        function onStageChange(i, stage) {
+            const finishedCheckbox = document.getElementById(`finished-${i}`);
+            
+            if (stage === 'completed') {
+                if (finishedCheckbox) finishedCheckbox.checked = true;
+                if (activeTimers[i]) {
+                    clearInterval(activeTimers[i]);
+                    activeTimers[i] = null;
+                }
+                timerRunning[i] = false;
+                const btn = document.getElementById(`timer-btn-${i}`);
+                if (btn) btn.innerText = "Completed";
+            } else if (stage === 'blending') {
+                if (finishedCheckbox) finishedCheckbox.checked = false;
+                startTimer(i);
+            } else {
+                if (finishedCheckbox) finishedCheckbox.checked = false;
+                if (activeTimers[i]) {
+                    clearInterval(activeTimers[i]);
+                    activeTimers[i] = null;
+                }
+                timerRunning[i] = false;
+                timerSeconds[i] = 20 * 60;
+                updateTimerDisplay(i);
+                const btn = document.getElementById(`timer-btn-${i}`);
+                if (btn) btn.innerText = "Auto-Starts";
+            }
+            saveData();
+        }
+
+        function onFinishedChange(i) {
+            const finishedCheckbox = document.getElementById(`finished-${i}`);
+            const stageSelect = document.getElementById(`stage-${i}`);
+            
+            if (finishedCheckbox && finishedCheckbox.checked) {
+                if (stageSelect) {
+                    stageSelect.value = 'completed';
+                    onStageChange(i, 'completed');
+                }
+            } else {
+                if (stageSelect && stageSelect.value === 'completed') {
+                    stageSelect.value = 'not_started';
+                    onStageChange(i, 'not_started');
+                }
+            }
+            saveData();
+        }
+
+        function onDoNextChange(i) {
+            const doNextBox = document.getElementById(`do-next-${i}`);
+            const card = document.getElementById(`slot-card-${i}`);
+            if (doNextBox && doNextBox.checked) {
+                card.classList.add('slot-card-donext');
+            } else {
+                card.classList.remove('slot-card-donext');
+            }
+            saveData();
+        }
+
+        function calculateTotal(i) {
+            const inVal = parseFloat(document.getElementById(`lbsin-${i}`).value) || 0;
+            const outVal = parseFloat(document.getElementById(`lbsout-${i}`).value) || 0;
+            const totalField = document.getElementById(`total-${i}`);
+            if (inVal > 0 || outVal > 0) {
+                totalField.value = (inVal + outVal).toFixed(1);
+            } else {
+                totalField.value = '';
+            }
+            saveData();
+        }
+
+        function saveData() {
+            blendData.globalDate = document.getElementById('global-date').value;
+
+            if (!blendData.slots) blendData.slots = [];
+
+            blendData.slots.forEach((slot, i) => {
+                const bEl = document.getElementById(`blender-${i}`);
+                const oEl = document.getElementById(`operator-${i}`);
+                const lEl = document.getElementById(`lot-${i}`);
+                const dEl = document.getElementById(`desc-${i}`);
+                const liEl = document.getElementById(`lbsin-${i}`);
+                const loEl = document.getElementById(`lbsout-${i}`);
+                const tEl = document.getElementById(`total-${i}`);
+                const sEl = document.getElementById(`stage-${i}`);
+                const dnEl = document.getElementById(`do-next-${i}`);
+                const fEl = document.getElementById(`finished-${i}`);
+
+                if (bEl) slot.blenderNum = bEl.value;
+                if (oEl) slot.operator = oEl.value;
+                if (lEl) slot.lot = lEl.value;
+                if (dEl) slot.description = dEl.value;
+                if (liEl) slot.lbsIn = liEl.value;
+                if (loEl) slot.lbsOut = loEl.value;
+                if (tEl) slot.total = tEl.value;
+                if (sEl) slot.stage = sEl.value;
+                if (dnEl) slot.doNext = dnEl.checked;
+                if (fEl) slot.finished = fEl.checked;
+                slot.remainingSecs = timerSeconds[i] !== undefined ? timerSeconds[i] : 1200;
+            });
+
+            localStorage.setItem('pci_blend_tracker_data', JSON.stringify(blendData));
+            localStorage.setItem('pci_sync_trigger', Date.now().toString());
+        }
+
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'pci_blend_tracker_data' || e.key === 'pci_sync_trigger') {
+                const saved = localStorage.getItem('pci_blend_tracker_data');
+                if (saved) {
+                    try {
+                        blendData = JSON.parse(saved);
+                        document.getElementById('global-date').value = blendData.globalDate || '';
+                        renderSlots();
+                    } catch(err) {}
+                }
+            }
+        });
+
+        function openScanModal() {
+            document.getElementById('scan-modal').classList.remove('hidden');
+        }
+
+        function closeScanModal() {
+            document.getElementById('scan-modal').classList.add('hidden');
+            document.getElementById('scan-status-text').classList.add('hidden');
+        }
+
+        function handleImageScan(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const statusText = document.getElementById('scan-status-text');
+            statusText.classList.remove('hidden');
+            statusText.innerText = "Analyzing physical sheet...";
+
+            setTimeout(() => {
+                if (!blendData.slots) blendData.slots = [];
+                // Ensure at least 2 slots exist for the scanned data
+                while (blendData.slots.length < 2) {
+                    blendData.slots.push({ blenderNum: '', operator: '', lot: '', description: '', lbsIn: '', lbsOut: '', total: '', stage: 'not_started', doNext: false, finished: false, remainingSecs: 1200 });
+                }
+
+                blendData.slots[0].blenderNum = "6";
+                blendData.slots[0].lot = "67291";
+                blendData.slots[0].description = "CC Black B-2\n70 #Century Blk";
+
+                blendData.slots[1].blenderNum = "6";
+                blendData.slots[1].lot = "67291";
+                blendData.slots[1].description = "CC Black B-3\n70 #Century Blk";
+
+                saveData();
+                renderSlots();
+                statusText.innerText = "Successfully parsed and populated sheet!";
+                setTimeout(() => {
+                    closeScanModal();
+                }, 1200);
+            }, 1500);
+        }
+
+        function clearAllData() {
+            if (confirm("Are you sure you want to reset all batches?")) {
+                localStorage.removeItem('pci_blend_tracker_data');
+                location.reload();
+            }
+        }
+
+        window.onload = initApp;
+    </script>
+</body>
+</html>

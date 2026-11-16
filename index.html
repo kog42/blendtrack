@@ -567,8 +567,8 @@
 
                 const btn = document.getElementById(`timer-btn-${i}`);
                 if (btn) {
-                    if (slot.stage === 'completed') {
-                        btn.innerText = "Completed";
+                    if (slot.stage === 'finished' || slot.stage === 'completed') {
+                        btn.innerText = "Finished";
                     } else if (slot.stage === 'blending') {
                         btn.innerText = "Running (Unpausable)";
                     } else {
@@ -757,7 +757,8 @@
 
             slots.forEach((data, i) => {
                 const isDoNext = data.doNext ? 'slot-card-donext' : 'border-slate-800';
-                const btnLabel = data.stage === 'completed' ? 'Completed' : (data.stage === 'blending' ? 'Running (Unpausable)' : 'Auto-Starts');
+                const currentStage = data.stage === 'completed' ? 'finished' : (data.stage || 'not_started');
+                const btnLabel = currentStage === 'finished' ? 'Finished' : (currentStage === 'blending' ? 'Running (Unpausable)' : 'Auto-Starts');
                 const hasActivity = !!data.lastEditedBy;
 
                 html += `
@@ -827,9 +828,11 @@
                             <div class="flex items-center gap-2">
                                 <label class="text-xs text-slate-400 font-medium">Stage:</label>
                                 <select id="stage-${i}" onchange="onStageChange(${i}, this.value);" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400 font-medium">
-                                    <option value="not_started" ${data.stage === 'not_started' ? 'selected' : ''}>Not Started</option>
-                                    <option value="blending" ${data.stage === 'blending' ? 'selected' : ''}>Blending in Progress</option>
-                                    <option value="completed" ${data.stage === 'completed' ? 'selected' : ''}>Completed</option>
+                                    <option value="not_started" ${currentStage === 'not_started' ? 'selected' : ''}>Not started</option>
+                                    <option value="loading" ${currentStage === 'loading' ? 'selected' : ''}>Loading</option>
+                                    <option value="blending" ${currentStage === 'blending' ? 'selected' : ''}>Blending</option>
+                                    <option value="unloading" ${currentStage === 'unloading' ? 'selected' : ''}>Unloading</option>
+                                    <option value="finished" ${currentStage === 'finished' ? 'selected' : ''}>Finished</option>
                                 </select>
                             </div>
                         </div>
@@ -941,9 +944,16 @@
                 opEl.value = myOperatorName;
                 blendData.slots[i].operator = myOperatorName;
             }
-            markSlotEdited(i, `set Batch #${i + 1} to ${stage === 'blending' ? 'Blending in Progress' : (stage === 'completed' ? 'Completed' : 'Not Started')}`);
+            const stageLabels = {
+                not_started: 'Not started',
+                loading: 'Loading',
+                blending: 'Blending',
+                unloading: 'Unloading',
+                finished: 'Finished'
+            };
+            markSlotEdited(i, `set Batch #${i + 1} to ${stageLabels[stage] || stage}`);
             
-            if (stage === 'completed') {
+            if (stage === 'finished') {
                 if (finishedCheckbox) finishedCheckbox.checked = true;
                 if (activeTimers[i]) {
                     clearInterval(activeTimers[i]);
@@ -953,7 +963,7 @@
                 blendData.slots[i].timerStartedAt = null;
                 blendData.slots[i].remainingSecs = timerSeconds[i] !== undefined ? timerSeconds[i] : 1200;
                 const btn = document.getElementById(`timer-btn-${i}`);
-                if (btn) btn.innerText = "Completed";
+                if (btn) btn.innerText = "Finished";
             } else if (stage === 'blending') {
                 if (finishedCheckbox) finishedCheckbox.checked = false;
                 blendData.slots[i].timerStartedAt = Date.now();
@@ -966,9 +976,13 @@
                     delete activeTimers[i];
                 }
                 timerRunning[i] = false;
-                timerSeconds[i] = 20 * 60;
+                if (stage === 'not_started' || stage === 'loading') {
+                    timerSeconds[i] = 20 * 60;
+                    blendData.slots[i].remainingSecs = 1200;
+                } else {
+                    blendData.slots[i].remainingSecs = timerSeconds[i] !== undefined ? timerSeconds[i] : 1200;
+                }
                 blendData.slots[i].timerStartedAt = null;
-                blendData.slots[i].remainingSecs = 1200;
                 updateTimerDisplay(i);
                 const btn = document.getElementById(`timer-btn-${i}`);
                 if (btn) btn.innerText = "Auto-Starts";
@@ -982,11 +996,11 @@
             
             if (finishedCheckbox && finishedCheckbox.checked) {
                 if (stageSelect) {
-                    stageSelect.value = 'completed';
-                    onStageChange(i, 'completed');
+                    stageSelect.value = 'finished';
+                    onStageChange(i, 'finished');
                 }
             } else {
-                if (stageSelect && stageSelect.value === 'completed') {
+                if (stageSelect && stageSelect.value === 'finished') {
                     stageSelect.value = 'not_started';
                     onStageChange(i, 'not_started');
                 }
